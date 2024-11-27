@@ -12,6 +12,8 @@
 #include <winrt/Windows.Services.Store.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.ApplicationModel.h>
+#include <winrt/Windows.ApplicationModel.Core.h>
+#include <winrt/Windows.UI.Core.h>
 
 #include <memory>
 #include <sstream>
@@ -19,6 +21,24 @@ using namespace winrt;
 using namespace Windows::Services::Store;
 using namespace Windows::Foundation;
 using namespace Windows::ApplicationModel;
+using namespace Windows::ApplicationModel::Core;
+using namespace Windows::UI::Core;
+using namespace std;
+
+// Helper function to convert wstring to string
+std::string wstring_to_string(const std::wstring& wstr) {
+    int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (len == 0) {
+        throw std::runtime_error("Failed to convert wstring to string");
+    }
+
+    std::vector<char> buffer(len);
+    if (WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &buffer[0], len, nullptr, nullptr) == 0) {
+        throw std::runtime_error("Failed to convert wstring to string");
+    }
+
+    return std::string(&buffer[0]);
+}
 
 namespace microsoft_store_api {
 
@@ -61,20 +81,58 @@ void MicrosoftStoreApiPlugin::HandleMethodCall(
   } 
   else if (method_call.method_name().compare("requestRateAndReviewApp") == 0) {
       try {
-          StoreContext context = StoreContext::GetDefault();
-          auto asyncOp = context.RequestRateAndReviewAppAsync();
-          asyncOp.Completed(
-              [](IAsyncOperation<StoreRateAndReviewResult> const& asyncInfo, AsyncStatus const& asyncStatus) {
-                  if (asyncStatus == AsyncStatus::Completed) {
-                      auto result = asyncInfo.GetResults();
+          // Ensure this is called on the UI thread
+          //CoreDispatcher dispatcher = CoreWindow::GetForCurrentThread().Dispatcher();
+          CoreApplication::MainView().CoreWindow().Dispatcher().RunAsync(CoreDispatcherPriority::Normal,
+              [result = std::move(result)]() mutable {
+                  try {
+                      StoreContext context = StoreContext::GetDefault();
+                      auto asyncOp = context.RequestRateAndReviewAppAsync();
+                      asyncOp.Completed(
+                          [](IAsyncOperation<StoreRateAndReviewResult> const& asyncInfo, AsyncStatus const& asyncStatus) {
+                              if (asyncStatus == AsyncStatus::Completed) {
+                                  auto result = asyncInfo.GetResults();
+                                  // Handle the result if necessary
+                              }
+                              else {
+                                  // Handle the error or cancellation
+                              }
+                          });
+                      result->Success();
                   }
-                  else {
+                  catch (const winrt::hresult_error& ex) {
+                      // Convert HRESULT to string
+                      std::ostringstream oss;
+                      oss << "HRESULT: 0x" << std::hex << ex.code();
+                      std::string errorCode = oss.str();
+
+                      // Convert hstring to std::string
+                      std::wstring messageW = ex.message().c_str();
+                      std::string errorMessage = wstring_to_string(messageW);
+
+                      // Set the error
+                      result->Error(errorCode, errorMessage);
+                  }
+                  catch (const std::exception& ex) {
+                      result->Error("Error", ex.what());
                   }
               });
-          result->Success();
       }
-      catch (...) {
-          result->Error("Error", "Failed to rate and review app");
+      catch (const winrt::hresult_error& ex) {
+          // Convert HRESULT to string
+          std::ostringstream oss;
+          oss << "HRESULT: 0x" << std::hex << ex.code();
+          std::string errorCode = oss.str();
+
+          // Convert hstring to std::string
+          std::wstring messageW = ex.message().c_str();
+          std::string errorMessage = wstring_to_string(messageW);
+
+          // Set the error
+          result->Error(errorCode, errorMessage);
+      }
+      catch (const std::exception& ex) {
+          result->Error("Error", ex.what());
       }
 
   }

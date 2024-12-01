@@ -3,23 +3,28 @@
 // This must be included before many other Windows headers.
 #include <windows.h>
 
-// For getPlatformVersion; remove unless needed for your plugin implementation.
-#include <VersionHelpers.h>
-
-#include <flutter/method_channel.h>
-#include <flutter/plugin_registrar_windows.h>
-#include <flutter/standard_method_codec.h>
-#include <winrt/Windows.Services.Store.h>
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Services.Store.h>
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.ApplicationModel.Core.h>
 #include <winrt/Windows.UI.Core.h>
 
+
+// For getPlatformVersion; remove unless needed for your plugin implementation.
+#include <VersionHelpers.h>
+
+#include <ShObjIdl.h>
+
+#include <flutter/method_channel.h>
+#include <flutter/plugin_registrar_windows.h>
+#include <flutter/standard_method_codec.h>
+
 #include <memory>
 #include <sstream>
+
 using namespace winrt;
 using namespace Windows::Services::Store;
-using namespace Windows::Foundation;
+//using namespace Windows::Foundation;
 using namespace Windows::ApplicationModel;
 using namespace Windows::ApplicationModel::Core;
 using namespace Windows::UI::Core;
@@ -36,12 +41,12 @@ std::string wstring_to_string(const std::wstring& wstr) {
     if (WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &buffer[0], len, nullptr, nullptr) == 0) {
         throw std::runtime_error("Failed to convert wstring to string");
     }
-
+    
     return std::string(&buffer[0]);
 }
 
 namespace microsoft_store_api {
-
+    
 // static
 void MicrosoftStoreApiPlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
@@ -56,7 +61,13 @@ void MicrosoftStoreApiPlugin::RegisterWithRegistrar(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
         plugin_pointer->HandleMethodCall(call, std::move(result));
       });
-
+  
+  HWND hWnd = registrar->GetView()->GetNativeWindow();
+  StoreContext context = StoreContext::GetDefault();
+  auto initWindow{
+      context.as<IInitializeWithWindow>()
+  };
+  initWindow->Initialize(hWnd);
   registrar->AddPlugin(std::move(plugin));
 }
 
@@ -67,30 +78,18 @@ MicrosoftStoreApiPlugin::~MicrosoftStoreApiPlugin() {}
 void MicrosoftStoreApiPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  if (method_call.method_name().compare("getPlatformVersion") == 0) {
-    std::ostringstream version_stream;
-    version_stream << "Windows ";
-    if (IsWindows10OrGreater()) {
-      version_stream << "10+";
-    } else if (IsWindows8OrGreater()) {
-      version_stream << "8";
-    } else if (IsWindows7OrGreater()) {
-      version_stream << "7";
-    }
-    result->Success(flutter::EncodableValue(version_stream.str()));
-  } 
-  else if (method_call.method_name().compare("requestRateAndReviewApp") == 0) {
+  if (method_call.method_name().compare("requestRateAndReviewApp") == 0) {
       try {
           // Ensure this is called on the UI thread
           //CoreDispatcher dispatcher = CoreWindow::GetForCurrentThread().Dispatcher();
+          
           CoreApplication::MainView().CoreWindow().Dispatcher().RunAsync(CoreDispatcherPriority::Normal,
               [result = std::move(result)]() mutable {
                   try {
                       StoreContext context = StoreContext::GetDefault();
-                      auto asyncOp = context.RequestRateAndReviewAppAsync();
-                      asyncOp.Completed(
-                          [](IAsyncOperation<StoreRateAndReviewResult> const& asyncInfo, AsyncStatus const& asyncStatus) {
-                              if (asyncStatus == AsyncStatus::Completed) {
+                      Windows::Foundation::IAsyncOperation<StoreRateAndReviewResult> asyncOp = context.RequestRateAndReviewAppAsync();
+                      asyncOp.Completed([](Windows::Foundation::IAsyncOperation<StoreRateAndReviewResult> const& asyncInfo, Windows::Foundation::AsyncStatus const& asyncStatus) {
+                              if (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed) {
                                   auto result = asyncInfo.GetResults();
                                   // Handle the result if necessary
                               }

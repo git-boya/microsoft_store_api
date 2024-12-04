@@ -2,12 +2,13 @@
 import 'microsoft_store_api_platform_interface.dart';
 
 class MicrosoftStoreApi {
-  Future<String?> getPlatformVersion() {
-    return MicrosoftStoreApiPlatform.instance.getPlatformVersion();
-  }
   /// review
   Future<void> requestRateAndReviewApp() {
     return MicrosoftStoreApiPlatform.instance.requestRateAndReviewApp();
+  }
+
+  Future<void> reviewInMicrosoftStore(String productId){
+    return MicrosoftStoreApiPlatform.instance.reviewInMicrosoftStore(productId);
   }
   /// get PFN
   Future<String?> getPackageFamilyName() {

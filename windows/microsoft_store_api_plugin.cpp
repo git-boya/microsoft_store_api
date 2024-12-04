@@ -8,6 +8,7 @@
 #include <winrt/Windows.ApplicationModel.h>
 #include <winrt/Windows.ApplicationModel.Core.h>
 #include <winrt/Windows.UI.Core.h>
+#include <winrt/Windows.System.h>
 
 
 // For getPlatformVersion; remove unless needed for your plugin implementation.
@@ -45,8 +46,9 @@ std::string wstring_to_string(const std::wstring& wstr) {
     return std::string(&buffer[0]);
 }
 
+flutter::PluginRegistrarWindows* plugin_registrar;
 namespace microsoft_store_api {
-    
+
 // static
 void MicrosoftStoreApiPlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
@@ -61,13 +63,8 @@ void MicrosoftStoreApiPlugin::RegisterWithRegistrar(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
         plugin_pointer->HandleMethodCall(call, std::move(result));
       });
+  plugin_registrar = registrar;
   
-  HWND hWnd = registrar->GetView()->GetNativeWindow();
-  StoreContext context = StoreContext::GetDefault();
-  auto initWindow{
-      context.as<IInitializeWithWindow>()
-  };
-  initWindow->Initialize(hWnd);
   registrar->AddPlugin(std::move(plugin));
 }
 
@@ -87,6 +84,19 @@ void MicrosoftStoreApiPlugin::HandleMethodCall(
               [result = std::move(result)]() mutable {
                   try {
                       StoreContext context = StoreContext::GetDefault();
+                      // try one
+                      //HWND native_window = plugin_registrar->GetView()->GetNativeWindow();
+                      // try two
+                      //HWND native_window = GetAncestor(plugin_registrar->GetView()->GetNativeWindow(), GA_ROOT);
+                      // try three
+                      HWND native_window = GetForegroundWindow();
+                      
+                      if (native_window == nullptr) {
+                          result->Error("Error", "Main window handle is not available.");
+                          return;
+                      }
+                      auto initWindow = context.as<IInitializeWithWindow>();
+                      initWindow->Initialize(native_window);
                       Windows::Foundation::IAsyncOperation<StoreRateAndReviewResult> asyncOp = context.RequestRateAndReviewAppAsync();
                       asyncOp.Completed([](Windows::Foundation::IAsyncOperation<StoreRateAndReviewResult> const& asyncInfo, Windows::Foundation::AsyncStatus const& asyncStatus) {
                               if (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -134,6 +144,15 @@ void MicrosoftStoreApiPlugin::HandleMethodCall(
           result->Error("Error", ex.what());
       }
 
+  }
+  else if (method_call.method_name().compare("reviewInMicrosoftStore") == 0) {
+      
+      const std::string productId = std::get<std::string>(*method_call.arguments());
+      // ½« std::string ×ª»»Îª std::wstring
+      std::wstring wideProductId = std::wstring(productId.begin(), productId.end());
+      
+      Windows::System::Launcher::LaunchUriAsync(winrt::Windows::Foundation::Uri(L"ms-windows-store://review/?ProductId=" + wideProductId));
+      result->Success();
   }
   else if (method_call.method_name().compare("getPackageFamilyName") == 0) {
       try {

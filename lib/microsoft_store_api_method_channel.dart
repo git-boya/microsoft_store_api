@@ -10,14 +10,13 @@ class MethodChannelMicrosoftStoreApi extends MicrosoftStoreApiPlatform {
   final methodChannel = const MethodChannel('microsoft_store_api');
 
   @override
-  Future<String?> getPlatformVersion() async {
-    final version = await methodChannel.invokeMethod<String>('getPlatformVersion');
-    return version;
+  Future<void> requestRateAndReviewApp() async{
+    await methodChannel.invokeMethod('requestRateAndReviewApp');
   }
 
   @override
-  Future<void> requestRateAndReviewApp() async{
-    await methodChannel.invokeMethod('requestRateAndReviewApp');
+  Future<void> reviewInMicrosoftStore(String productId) async{
+    await methodChannel.invokeMethod('reviewInMicrosoftStore', productId);
   }
 
   @override
